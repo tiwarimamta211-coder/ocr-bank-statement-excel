@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCR बैंक स्टेटमेंट → Excel समरी | IncomeAIHub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{
+  --bg:#05060a;
+  --bg2:#0a0e17;
+  --panel:#0d1220;
+  --panel2:#101828;
+  --border:#1c2740;
+  --cyan:#00f0ff;
+  --purple:#b967ff;
+  --green:#00ff9d;
+  --red:#ff4d6d;
+  --amber:#ffb020;
+  --text:#dbe6ff;
+  --muted:#7a88ab;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;overflow-x:hidden;}
+body{
+  background:
+    radial-gradient(ellipse at 20% -10%, rgba(0,240,255,0.09), transparent 45%),
+    radial-gradient(ellipse at 90% 10%, rgba(185,103,255,0.09), transparent 45%),
+    var(--bg);
+  min-height:100vh;
+  position:relative;
+}
+body::before{
+  content:"";
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 3px);
+  pointer-events:none;
+  z-index:9999;
+  animation:scan 9s linear infinite;
+}
+@keyframes scan{0%{background-position:0 0;}100%{background-position:0 60px;}}
+::selection{background:var(--cyan);color:#000;}
+h1,h2,h3,.font-orb{font-family:'Orbitron',sans-serif;}
+.mono{font-family:'Share Tech Mono',monospace;}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 80px;}
+header.top{
+  text-align:center;padding:34px 16px 26px;position:relative;
+}
+header.top .badge{
+  display:inline-block;font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:2px;
+  color:var(--green);border:1px solid rgba(0,255,157,0.35);background:rgba(0,255,157,0.06);
+  padding:5px 14px;border-radius:20px;margin-bottom:16px;text-transform:uppercase;
+}
+header.top h1{
+  font-size:clamp(24px,4.4vw,42px);font-weight:900;
+  background:linear-gradient(90deg,var(--cyan),var(--purple));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  letter-spacing:1px;line-height:1.25;
+}
+header.top p.tag{color:var(--muted);margin-top:12px;font-size:16px;font-weight:500;max-width:640px;margin-left:auto;margin-right:auto;}
+header.top p.tag b{color:var(--text);}
+
+.grid-cols{display:grid;grid-template-columns:1fr;gap:22px;}
+@media(min-width:980px){.grid-cols.two{grid-template-columns:1.1fr 1fr;}}
+
+.panel{
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border:1px solid var(--border);border-radius:16px;
+  padding:22px;position:relative;overflow:hidden;
+}
+.panel::before{
+  content:"";position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:.5;
+}
+.panel h2{font-size:15px;color:var(--cyan);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.panel h2 .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);}
+
+/* ---------- upload ---------- */
+.dropzone{
+  border:2px dashed var(--border);border-radius:14px;padding:38px 18px;text-align:center;
+  cursor:pointer;transition:.25s;background:rgba(0,240,255,0.02);
+}
+.dropzone.drag{border-color:var(--cyan);background:rgba(0,240,255,0.07);box-shadow:0 0 30px rgba(0,240,255,0.15) inset;}
+.dropzone .icon{font-size:40px;margin-bottom:10px;}
+.dropzone h3{font-size:18px;color:var(--text);margin-bottom:6px;}
+.dropzone p{color:var(--muted);font-size:14px;}
+.dropzone input{display:none;}
+.filelist{margin-top:14px;display:flex;flex-direction:column;gap:8px;}
+.filechip{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:13px;
+}
+.filechip .name{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;}
+.filechip .rm{color:var(--red);cursor:pointer;font-size:16px;background:none;border:none;}
+.filechip .status{font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;}
+
+.btn{
+  font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:.5px;font-size:15px;
+  border:none;border-radius:10px;padding:13px 22px;cursor:pointer;transition:.2s;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
+}
+.btn-primary{background:linear-gradient(90deg,var(--cyan),var(--purple));color:#04060a;}
+.btn-primary:hover{filter:brightness(1.12);transform:translateY(-1px);}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed;transform:none;}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text);}
+.btn-outline:hover{border-color:var(--cyan);color:var(--cyan);}
+.btn-green{background:linear-gradient(90deg,var(--green),#00c97c);color:#04160e;}
+.btn-green:hover{filter:brightness(1.1);}
+.btn-row{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
+.btn-row .btn{width:auto;flex:1;min-width:140px;}
+
+/* progress */
+.progress-wrap{margin-top:16px;display:none;}
+.progress-wrap.show{display:block;}
+.progress-label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px;font-family:'Share Tech Mono',monospace;}
+.progress-bar{height:8px;border-radius:5px;background:var(--bg2);border:1px solid var(--border);overflow:hidden;}
+.progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),var(--green));transition:width .25s;box-shadow:0 0 10px var(--cyan);}
+
+/* ---------- summary cards ---------- */
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+@media(min-width:600px){.stats{grid-template-columns:repeat(4,1fr);}}
+.stat{
+  background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;
+}
+.stat .lbl{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;}
+.stat .val{font-family:'Share Tech Mono',monospace;font-size:20px;font-weight:700;}
+.stat.credit .val{color:var(--green);}
+.stat.debit .val{color:var(--red);}
+.stat.net .val{color:var(--cyan);}
+.stat.count .val{color:var(--amber);}
+
+/* category bars */
+.cat-row{margin-bottom:10px;}
+.cat-row .cat-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;}
+.cat-row .cat-top .amt{font-family:'Share Tech Mono',monospace;color:var(--text);}
+.cat-track{height:8px;border-radius:5px;background:var(--bg2);overflow:hidden;border:1px solid var(--border);}
+.cat-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--purple),var(--cyan));}
+
+/* ---------- table ---------- */
+.table-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:12px;margin-top:6px;}
+table{width:100%;border-collapse:collapse;min-width:680px;font-size:13.5px;}
+thead th{
+  background:var(--bg2);color:var(--cyan);text-align:left;padding:10px 12px;font-size:11px;
+  text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border);position:sticky;top:0;
+}
+tbody td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text);}
+tbody tr:hover{background:rgba(0,240,255,0.03);}
+tbody tr:last-child td{border-bottom:none;}
+td.debit{color:var(--red);font-family:'Share Tech Mono',monospace;}
+td.credit{color:var(--green);font-family:'Share Tech Mono',monospace;}
+td.bal{color:var(--muted);font-family:'Share Tech Mono',monospace;}
+td[contenteditable]{outline:none;}
+td[contenteditable]:focus{background:rgba(0,240,255,0.08);box-shadow:inset 0 0 0 1px var(--cyan);}
+select.cat-select{
+  background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:6px;
+  padding:4px 6px;font-family:'Rajdhani',sans-serif;font-size:12px;
+}
+.rowdel{background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;}
+.empty-state{text-align:center;padding:36px 12px;color:var(--muted);font-size:14px;}
+
+/* ---------- guide ---------- */
+.guide{background:linear-gradient(180deg,rgba(185,103,255,0.05),transparent);}
+.guide h3{color:var(--purple);font-size:16px;margin:14px 0 6px;}
+.guide h3:first-child{margin-top:0;}
+.guide p, .guide li{color:var(--text);font-size:14.5px;line-height:1.65;}
+.guide ol,.guide ul{padding-left:20px;margin-bottom:6px;}
+.guide .hi{color:var(--muted);font-size:13.5px;display:block;margin-top:2px;}
+
+/* ---------- ad slots ---------- */
+.ad-slot{
+  border:1px dashed var(--border);border-radius:12px;padding:16px;text-align:center;
+  color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase;
+  font-family:'Share Tech Mono',monospace;margin:24px 0;background:rgba(255,255,255,0.015);
+}
+
+/* footer */
+footer{text-align:center;color:var(--muted);font-size:12px;margin-top:40px;font-family:'Share Tech Mono',monospace;}
+footer span{color:var(--cyan);}
+
+.toast{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--panel2);border:1px solid var(--cyan);color:var(--text);padding:12px 22px;border-radius:10px;
+  font-size:14px;opacity:0;transition:.3s;z-index:99999;pointer-events:none;box-shadow:0 0 24px rgba(0,240,255,0.25);
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
+.field{display:flex;flex-direction:column;gap:5px;}
+.field label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+.field select,.field input{
+  background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 10px;font-size:13.5px;
+  font-family:'Rajdhani',sans-serif;
+}
+.hint{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5;}
+.hint b{color:var(--amber);}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="badge">⚡ IncomeAIHub · Free AI Tool</div>
+    <h1>OCR बैंक स्टेटमेंट → Excel समरी जेनरेटर</h1>
+    <p class="tag">अपने bank statement (photo/scan/PDF) को upload करें — AI उसे scan करके transactions निकालेगा और <b>editable Excel summary</b> बनाकर देगा। 100% browser में process होता है, कोई data server पर नहीं जाता।</p>
+  </header>
+
+  <div class="grid-cols two">
+    <!-- LEFT: Upload + controls -->
+    <div class="panel">
+      <h2><span class="dot"></span>Step 1 — Statement Upload करें</h2>
+
+      <div class="dropzone" id="dropzone">
+        <div class="icon">📄</div>
+        <h3>यहाँ Drag & Drop करें</h3>
+        <p>या क्लिक करके file चुनें — JPG, PNG, या PDF (max 8 files)</p>
+        <input type="file" id="fileInput" accept="image/*,application/pdf" multiple>
+      </div>
+
+      <div class="filelist" id="fileList"></div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>OCR Language</label>
+          <select id="ocrLang">
+            <option value="eng">English</option>
+            <option value="eng+hin">English + Hindi</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date Format</label>
+          <select id="dateFormat">
+            <option value="dmy">DD/MM/YYYY</option>
+            <option value="mdy">MM/DD/YYYY</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="scanBtn" disabled>🔍 Scan & Extract करें</button>
+      </div>
+
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-label"><span id="progressLabel">Processing...</span><span id="progressPct">0%</span></div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+
+      <p class="hint">💡 <b>बेहतर result के लिए:</b> statement को साफ़, सीधी (not tilted) और अच्छी light में scan/photo करें। Table format वाले statements सबसे अच्छे से पढ़े जाते हैं।</p>
+    </div>
+
+    <!-- RIGHT: Summary -->
+    <div class="panel">
+      <h2><span class="dot"></span>Step 2 — Summary</h2>
+      <div class="stats">
+        <div class="stat credit"><div class="lbl">Total Credit</div><div class="val mono" id="statCredit">₹0</div></div>
+        <div class="stat debit"><div class="lbl">Total Debit</div><div class="val mono" id="statDebit">₹0</div></div>
+        <div class="stat net"><div class="lbl">Net Balance</div><div class="val mono" id="statNet">₹0</div></div>
+        <div class="stat count"><div class="lbl">Transactions</div><div class="val mono" id="statCount">0</div></div>
+      </div>
+
+      <div style="margin-top:20px;">
+        <h2 style="margin-bottom:12px;"><span class="dot" style="background:var(--purple);box-shadow:0 0 8px var(--purple);"></span>Category Breakdown</h2>
+        <div id="catBreakdown"><p style="color:var(--muted);font-size:13px;">Scan करने के बाद category breakdown यहाँ दिखेगा।</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ad-slot">Advertisement Slot — 728x90 / Responsive</div>
+
+  <!-- Transactions table -->
+  <div class="panel" style="margin-top:22px;">
+    <h2><span class="dot"></span>Step 3 — Transactions (Editable)</h2>
+    <div class="table-scroll">
+      <table id="txTable">
+        <thead>
+          <tr>
+            <th style="width:110px;">Date</th>
+            <th>Description</th>
+            <th style="width:130px;">Category</th>
+            <th style="width:110px;">Debit (₹)</th>
+            <th style="width:110px;">Credit (₹)</th>
+            <th style="width:120px;">Balance (₹)</th>
+            <th style="width:36px;"></th>
+          </tr>
+        </thead>
+        <tbody id="txBody">
+          <tr><td colspan="7"><div class="empty-state">अभी कोई transaction नहीं है। Statement upload करके "Scan & Extract" दबाएँ, या नीचे से manually row जोड़ें।</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-outline" id="addRowBtn">➕ Row जोड़ें</button>
+      <button class="btn btn-outline" id="clearBtn">🗑 सब Clear करें</button>
+      <button class="btn btn-green" id="exportExcelBtn">📊 Excel Download करें</button>
+      <button class="btn btn-outline" id="exportCsvBtn">⬇ CSV Download करें</button>
+    </div>
+  </div>
+
+  <div class="ad-slot">Advertisement Slot — Responsive</div>
+
+  <!-- Hindi/Hinglish Guide -->
+  <div class="panel guide">
+    <h2><span class="dot" style="background:var(--purple);box-shadow:0 0 8px var(--purple);"></span>इस्तेमाल कैसे करें (Hindi Guide)</h2>
+
+    <h3>1. Statement Upload करें</h3>
+    <p>अपने bank statement की photo खींचें या PDF/image file चुनें। एक साथ कई pages/files भी upload कर सकते हैं।</p>
+
+    <h3>2. Scan & Extract दबाएँ</h3>
+    <p>AI (OCR) आपकी image से text पढ़ेगा और automatically date, description, debit, credit, balance वाली rows table में डाल देगा।
+      <span class="hi">Note: OCR हमेशा 100% सही नहीं होता — नीचे table में gaya हुआ data manually edit ज़रूर करें।</span>
+    </p>
+
+    <h3>3. Table Edit करें</h3>
+    <p>किसी भी cell पर click करके उसे directly edit कर सकते हैं। Category dropdown से हर transaction को Salary, Shopping, Bills, ATM, Transfer आदि में classify करें ताकि summary सही बने।</p>
+
+    <h3>4. Excel Download करें</h3>
+    <p>"Excel Download करें" दबाने पर एक .xlsx file बनेगी जिसमें दो sheets होंगी — एक <b>Summary</b> (total credit/debit, category-wise breakdown) और एक <b>Transactions</b> (पूरी list)। यह file आप अपने accountant, client, या ITR filing के लिए इस्तेमाल कर सकते हैं।</p>
+
+    <h3>Freelancers/Small Business के लिए Tip</h3>
+    <p>हर महीने का statement यहाँ scan करके Excel में save कर लें — साल के अंत में आपके पास ready-made income/expense record होगा, जो GST filing और ITR दोनों में काम आएगा।</p>
+
+    <p class="hi">🔒 Privacy: यह tool पूरी तरह आपके browser में चलता है — कोई भी bank statement data कहीं upload या server पर store नहीं होता।</p>
+  </div>
+
+  <footer>
+    <span>IncomeAIHub</span> · OCR Bank Statement → Excel Summary · Free Forever · Data 100% Local
+  </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------------- state ----------------
+  let uploadedFiles = []; // {file, id, status}
+  let transactions = []; // {date, desc, category, debit, credit, balance}
+  const CATEGORIES = ["Salary","Shopping","Bills & Utilities","ATM Withdrawal","Transfer","Food & Dining","Rent","Investment","Refund","Other"];
+  const CATEGORY_KEYWORDS = {
+    "Salary": ["salary","sal cr","payroll","stipend"],
+    "Shopping": ["amazon","flipkart","myntra","shop","mall","store","retail"],
+    "Bills & Utilities": ["electricity","water bill","recharge","broadband","dth","gas bill","mobile bill","utility"],
+    "ATM Withdrawal": ["atm","cash wdl","cash withdrawal"],
+    "Transfer": ["neft","imps","rtgs","upi","transfer","paytm","gpay","phonepe"],
+    "Food & Dining": ["swiggy","zomato","restaurant","cafe","food"],
+    "Rent": ["rent"],
+    "Investment": ["mutual fund","sip","zerodha","groww","stocks","upstox"],
+    "Refund": ["refund","reversal","cashback"]
+  };
+
+  // ---------------- elements ----------------
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const fileListEl = document.getElementById('fileList');
+  const scanBtn = document.getElementById('scanBtn');
+  const progressWrap = document.getElementById('progressWrap');
+  const progressFill = document.getElementById('progressFill');
+  const progressLabel = document.getElementById('progressLabel');
+  const progressPct = document.getElementById('progressPct');
+  const txBody = document.getElementById('txBody');
+  const toast = document.getElementById('toast');
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(()=>toast.classList.remove('show'), 2600);
+  }
+
+  function fmtINR(n){
+    n = Number(n)||0;
+    return '₹' + n.toLocaleString('en-IN', {maximumFractionDigits:2});
+  }
+
+  // ---------------- upload handling ----------------
+  ['dragenter','dragover'].forEach(evt=>{
+    dropzone.addEventListener(evt, e=>{e.preventDefault();e.stopPropagation();dropzone.classList.add('drag');});
+  });
+  ['dragleave','drop'].forEach(evt=>{
+    dropzone.addEventListener(evt, e=>{e.preventDefault();e.stopPropagation();dropzone.classList.remove('drag');});
+  });
+  dropzone.addEventListener('drop', e=>{
+    handleFiles(e.dataTransfer.files);
+  });
+  dropzone.addEventListener('click', ()=>fileInput.click());
+  fileInput.addEventListener('change', e=>handleFiles(e.target.files));
+
+  function handleFiles(fileArr){
+    const arr = Array.from(fileArr).slice(0, 8 - uploadedFiles.length);
+    arr.forEach(file=>{
+      if(!file.type.startsWith('image/') && file.type !== 'application/pdf') return;
+      const id = 'f'+Date.now()+Math.random().toString(36).slice(2,7);
+      uploadedFiles.push({file, id, status:'Ready'});
+    });
+    renderFileList();
+    scanBtn.disabled = uploadedFiles.length === 0;
+  }
+
+  function renderFileList(){
+    fileListEl.innerHTML = '';
+    uploadedFiles.forEach(f=>{
+      const chip = document.createElement('div');
+      chip.className = 'filechip';
+      chip.innerHTML = `<span class="name">${f.file.name}</span><span class="status" id="status-${f.id}">${f.status}</span><button class="rm" data-id="${f.id}">✕</button>`;
+      fileListEl.appendChild(chip);
+    });
+    fileListEl.querySelectorAll('.rm').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        uploadedFiles = uploadedFiles.filter(f=>f.id !== btn.dataset.id);
+        renderFileList();
+        scanBtn.disabled = uploadedFiles.length === 0;
+      });
+    });
+  }
+
+  function setFileStatus(id, status){
+    const el = document.getElementById('status-'+id);
+    if(el) el.textContent = status;
+  }
+
+  // ---------------- OCR + PDF handling ----------------
+  scanBtn.addEventListener('click', runScan);
+
+  async function fileToImages(entry){
+    // returns array of image sources (canvas or dataURL) to run OCR on
+    if(entry.file.type === 'application/pdf'){
+      const buf = await entry.file.arrayBuffer();
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+      const images = [];
+      for(let p=1; p<=pdf.numPages; p++){
+        const page = await pdf.getPage(p);
+        const viewport = page.getViewport({scale: 2.2});
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        await page.render({canvasContext: ctx, viewport}).promise;
+        images.push(canvas);
+      }
+      return images;
+    } else {
+      return [entry.file];
+    }
+  }
+
+  async function runScan(){
+    if(uploadedFiles.length === 0) return;
+    scanBtn.disabled = true;
+    progressWrap.classList.add('show');
+    const lang = document.getElementById('ocrLang').value;
+    let fullText = '';
+
+    try{
+      const worker = await Tesseract.createWorker(lang, 1, {
+        logger: m=>{
+          if(m.status && m.progress != null){
+            progressLabel.textContent = m.status;
+            const pct = Math.round(m.progress*100);
+            progressFill.style.width = pct+'%';
+            progressPct.textContent = pct+'%';
+          }
+        }
+      });
+
+      for(let i=0;i<uploadedFiles.length;i++){
+        const entry = uploadedFiles[i];
+        setFileStatus(entry.id, 'Processing...');
+        progressLabel.textContent = `File ${i+1}/${uploadedFiles.length}: ${entry.file.name}`;
+        const images = await fileToImages(entry);
+        for(const img of images){
+          const { data } = await worker.recognize(img);
+          fullText += '\n' + data.text;
+        }
+        setFileStatus(entry.id, '✅ Done');
+      }
+      await worker.terminate();
+
+      const parsed = parseStatementText(fullText);
+      if(parsed.length === 0){
+        showToast('कोई transaction नहीं मिला — कृपया image की quality check करें या manually rows जोड़ें।');
+      } else {
+        transactions = transactions.concat(parsed);
+        renderTable();
+        updateSummary();
+        showToast(`${parsed.length} transactions मिले और table में जोड़ दिए गए ✅`);
+      }
+    }catch(err){
+      console.error(err);
+      showToast('OCR में error आया। कृपया फिर से कोशिश करें।');
+    }finally{
+      scanBtn.disabled = false;
+      setTimeout(()=>{ progressWrap.classList.remove('show'); progressFill.style.width='0%'; progressPct.textContent='0%'; }, 800);
+    }
+  }
+
+  // ---------------- text parsing ----------------
+  function parseStatementText(text){
+    const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+    const dateFormat = document.getElementById('dateFormat').value;
+    const dateRegex = /(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/;
+    const amountRegex = /([\d,]+\.\d{2}|\d[\d,]{2,})/g;
+
+    const results = [];
+    lines.forEach(line=>{
+      const dateMatch = line.match(dateRegex);
+      if(!dateMatch) return;
+
+      const amounts = line.match(amountRegex);
+      if(!amounts || amounts.length === 0) return;
+
+      const nums = amounts.map(a=>parseFloat(a.replace(/,/g,''))).filter(n=>!isNaN(n));
+      if(nums.length === 0) return;
+
+      let desc = line.replace(dateMatch[0], '');
+      amounts.forEach(a=>{ desc = desc.replace(a, ''); });
+      desc = desc.replace(/\s{2,}/g,' ').replace(/^[\s\-|:.]+|[\s\-|:.]+$/g,'').trim();
+      if(!desc) desc = 'Transaction';
+
+      let debit = 0, credit = 0, balance = 0;
+      const lowerLine = line.toLowerCase();
+
+      if(nums.length >= 3){
+        // assume: amount, ?, balance  OR debit, credit, balance
+        balance = nums[nums.length-1];
+        if(nums.length >= 2) {
+          const amt = nums[0];
+          if(lowerLine.includes('cr') || lowerLine.includes('credit') || lowerLine.includes('deposit')){
+            credit = amt;
+          } else {
+            debit = amt;
+          }
+        }
+      } else if(nums.length === 2){
+        balance = nums[1];
+        const amt = nums[0];
+        if(lowerLine.includes('cr') || lowerLine.includes('credit') || lowerLine.includes('deposit')){
+          credit = amt;
+        } else {
+          debit = amt;
+        }
+      } else {
+        const amt = nums[0];
+        if(lowerLine.includes('cr') || lowerLine.includes('credit') || lowerLine.includes('deposit')){
+          credit = amt;
+        } else {
+          debit = amt;
+        }
+      }
+
+      results.push({
+        date: normalizeDate(dateMatch[0], dateFormat),
+        desc: desc,
+        category: autoCategory(desc),
+        debit: debit || 0,
+        credit: credit || 0,
+        balance: balance || 0
+      });
+    });
+    return results;
+  }
+
+  function normalizeDate(raw, fmt){
+    const parts = raw.split(/[\/\-.]/);
+    if(parts.length !== 3) return raw;
+    let [a,b,c] = parts;
+    if(c.length === 2) c = (parseInt(c) > 50 ? '19' : '20') + c;
+    if(fmt === 'mdy'){ return `${b.padStart(2,'0')}/${a.padStart(2,'0')}/${c}`; }
+    return `${a.padStart(2,'0')}/${b.padStart(2,'0')}/${c}`;
+  }
+
+  function autoCategory(desc){
+    const d = desc.toLowerCase();
+    for(const cat in CATEGORY_KEYWORDS){
+      if(CATEGORY_KEYWORDS[cat].some(kw=>d.includes(kw))) return cat;
+    }
+    return 'Other';
+  }
+
+  // ---------------- table render ----------------
+  function catOptions(selected){
+    return CATEGORIES.map(c=>`<option value="${c}" ${c===selected?'selected':''}>${c}</option>`).join('');
+  }
+
+  function renderTable(){
+    if(transactions.length === 0){
+      txBody.innerHTML = `<tr><td colspan="7"><div class="empty-state">अभी कोई transaction नहीं है। Statement upload करके "Scan & Extract" दबाएँ, या नीचे से manually row जोड़ें।</div></td></tr>`;
+      return;
+    }
+    txBody.innerHTML = transactions.map((t,idx)=>`
+      <tr data-idx="${idx}">
+        <td contenteditable="true" data-field="date">${t.date}</td>
+        <td contenteditable="true" data-field="desc">${t.desc}</td>
+        <td><select class="cat-select" data-field="category">${catOptions(t.category)}</select></td>
+        <td class="debit" contenteditable="true" data-field="debit">${t.debit ? t.debit.toFixed(2) : ''}</td>
+        <td class="credit" contenteditable="true" data-field="credit">${t.credit ? t.credit.toFixed(2) : ''}</td>
+        <td class="bal" contenteditable="true" data-field="balance">${t.balance ? t.balance.toFixed(2) : ''}</td>
+        <td><button class="rowdel" data-del="${idx}">✕</button></td>
+      </tr>
+    `).join('');
+
+    txBody.querySelectorAll('[data-field]').forEach(el=>{
+      const evt = el.tagName === 'SELECT' ? 'change' : 'blur';
+      el.addEventListener(evt, onCellEdit);
+    });
+    txBody.querySelectorAll('[data-del]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        transactions.splice(parseInt(btn.dataset.del),1);
+        renderTable();
+        updateSummary();
+      });
+    });
+  }
+
+  function onCellEdit(e){
+    const el = e.target;
+    const row = el.closest('tr');
+    const idx = parseInt(row.dataset.idx);
+    const field = el.dataset.field;
+    let val = el.tagName === 'SELECT' ? el.value : el.textContent.trim();
+    if(field === 'debit' || field === 'credit' || field === 'balance'){
+      val = parseFloat(val.replace(/[^\d.\-]/g,'')) || 0;
+    }
+    transactions[idx][field] = val;
+    updateSummary();
+  }
+
+  document.getElementById('addRowBtn').addEventListener('click', ()=>{
+    transactions.push({date:'', desc:'', category:'Other', debit:0, credit:0, balance:0});
+    renderTable();
+    updateSummary();
+  });
+
+  document.getElementById('clearBtn').addEventListener('click', ()=>{
+    if(transactions.length && !confirm('सभी transactions clear करें?')) return;
+    transactions = [];
+    renderTable();
+    updateSummary();
+  });
+
+  // ---------------- summary ----------------
+  function updateSummary(){
+    const totalCredit = transactions.reduce((s,t)=>s+(Number(t.credit)||0),0);
+    const totalDebit = transactions.reduce((s,t)=>s+(Number(t.debit)||0),0);
+    document.getElementById('statCredit').textContent = fmtINR(totalCredit);
+    document.getElementById('statDebit').textContent = fmtINR(totalDebit);
+    document.getElementById('statNet').textContent = fmtINR(totalCredit - totalDebit);
+    document.getElementById('statCount').textContent = transactions.length;
+
+    const catTotals = {};
+    transactions.forEach(t=>{
+      const amt = (Number(t.debit)||0) + (Number(t.credit)||0);
+      catTotals[t.category] = (catTotals[t.category]||0) + amt;
+    });
+    const maxVal = Math.max(1, ...Object.values(catTotals));
+    const catEl = document.getElementById('catBreakdown');
+    const entries = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+    if(entries.length === 0){
+      catEl.innerHTML = `<p style="color:var(--muted);font-size:13px;">Scan करने के बाद category breakdown यहाँ दिखेगा।</p>`;
+    } else {
+      catEl.innerHTML = entries.map(([cat,val])=>`
+        <div class="cat-row">
+          <div class="cat-top"><span>${cat}</span><span class="amt">${fmtINR(val)}</span></div>
+          <div class="cat-track"><div class="cat-fill" style="width:${(val/maxVal*100).toFixed(1)}%"></div></div>
+        </div>
+      `).join('');
+    }
+  }
+
+  // ---------------- export ----------------
+  document.getElementById('exportExcelBtn').addEventListener('click', ()=>{
+    if(transactions.length === 0){ showToast('Export करने के लिए पहले कुछ transactions add करें।'); return; }
+
+    const totalCredit = transactions.reduce((s,t)=>s+(Number(t.credit)||0),0);
+    const totalDebit = transactions.reduce((s,t)=>s+(Number(t.debit)||0),0);
+    const catTotals = {};
+    transactions.forEach(t=>{
+      const amt = (Number(t.debit)||0) + (Number(t.credit)||0);
+      catTotals[t.category] = (catTotals[t.category]||0) + amt;
+    });
+
+    const summaryRows = [
+      ['Bank Statement Summary'],
+      [''],
+      ['Total Credit (₹)', totalCredit],
+      ['Total Debit (₹)', totalDebit],
+      ['Net Balance (₹)', totalCredit-totalDebit],
+      ['Total Transactions', transactions.length],
+      [''],
+      ['Category-wise Breakdown'],
+      ['Category','Amount (₹)'],
+      ...Object.entries(catTotals).sort((a,b)=>b[1]-a[1])
+    ];
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+    wsSummary['!cols'] = [{wch:26},{wch:18}];
+
+    const txRows = [
+      ['Date','Description','Category','Debit (₹)','Credit (₹)','Balance (₹)'],
+      ...transactions.map(t=>[t.date, t.desc, t.category, t.debit||'', t.credit||'', t.balance||''])
+    ];
+    const wsTx = XLSX.utils.aoa_to_sheet(txRows);
+    wsTx['!cols'] = [{wch:12},{wch:34},{wch:18},{wch:12},{wch:12},{wch:14}];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+    XLSX.utils.book_append_sheet(wb, wsTx, 'Transactions');
+    XLSX.writeFile(wb, `Bank_Statement_Summary_${Date.now()}.xlsx`);
+    showToast('Excel file download हो गई ✅');
+  });
+
+  document.getElementById('exportCsvBtn').addEventListener('click', ()=>{
+    if(transactions.length === 0){ showToast('Export करने के लिए पहले कुछ transactions add करें।'); return; }
+    const rows = [['Date','Description','Category','Debit','Credit','Balance'],
+      ...transactions.map(t=>[t.date,t.desc,t.category,t.debit||'',t.credit||'',t.balance||''])];
+    const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Bank_Statement_${Date.now()}.csv`;
+    link.click();
+    showToast('CSV file download हो गई ✅');
+  });
+
+  // init
+  renderTable();
+  updateSummary();
+})();
+</script>
+</body>
+</html>
